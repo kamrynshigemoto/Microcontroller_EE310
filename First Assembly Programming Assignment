@@ -1,0 +1,191 @@
+;----------------------------------
+; Title: HEATING AND COOLING SYSTEM
+;----------------------------------
+; Purpose:
+; The purpose of this program is to create a heating and cooling system that allows a user to enter a desired (reference) temperature.
+; If the measured temperature is greater than the reference temperature than the cooling system will be turned on.
+; If the measured temperature is less than the reference temperature than the heating system is turned on.
+; The program will also store the temperature values in decimal form in certain registers.
+;
+; Dependencies: myConfigFile.inc
+; Compiler: ASM v2.46
+; Author: Kamryn Shigemoto
+; Date: March 04, 2024
+; OUTPUTS: PORTD.1, PORTD.2
+; INPUTS: measuredTempInput (temperature sensor), refTempInput (keypad)
+; Versions:
+;   v1.0:   March 04, 2024 - First version
+;----------------------------------
+
+;----------------------------------
+; Initialization
+;----------------------------------
+#include "C:\Users\kamsh\MPLABXProjects\EE310_Assignment4_HeatCoolSystem.X\myConfigFile.inc"
+#include <xc.inc>
+;----------------------------------
+    
+;----------------------------------
+; PROGRAM INPUTS
+;----------------------------------
+measuredTempInput   EQU	    5	    ;this is the input value
+refTempInput	    EQU	    15	    ;this is the input value
+;----------------------------------
+
+;----------------------------------
+; REGISTERS
+;----------------------------------
+measuredTempREG	    EQU	    0x21    ;this is the measuredTemp value
+refTempREG	    EQU	    0x20    ;this is the refTemp value
+contREG		    EQU	    0x22    ;this controls the heating and cooling system
+;----------------------------------
+
+;----------------------------------
+; PROGRAM OUTPUTS
+;----------------------------------
+#define	measuredTempDecimalHIGH 0x72    ;upper bit of measured temp value
+#define measuredTempDecimalMID	0x71	;middle bit of measured temp value
+#define measuredTempDecimalLOW	0x70	;lower bit of measured temp value
+#define	refTempDecimalHIGH	0x62    ;upper bit of ref temp value
+#define refTempDecimalMID	0x61	;middle bit of ref temp value
+#define refTempDecimalLOW	0x60	;lower bit of ref temp value
+#define HEATER		    PORTD,1 ;control for heater
+#define COOLER		    PORTD,2 ;control for cooler
+;----------------------------------
+    
+;----------------------------------
+; MAIN PROGRAM
+;----------------------------------
+PSECT absdata,abs,ovrld
+
+    ORG	    0x20	;requirement 7 --> start from REG 0x20
+    MOVLW   0x00	
+    MOVWF   TRISD, A	;clear PORTD, set as output
+    MOVLW   measuredTempInput	;move measuredTempInput to WREG
+    MOVWF   measuredTempREG	;move measuredTempInput to REG 0x21
+    MOVLW   refTempInput	;move refTempInput to WREG
+    MOVWF   refTempREG		;move refTempInput to REG 0x20
+    
+;Check if refTemp value is greater than 10 and less than 50
+_refcheck:
+    MOVLW   0xA			;move 10 into WREG
+    CPFSGT  refTempREG		;check if refTempREG is greater than 10
+    SLEEP			;if not greater than 10, sleep (error)
+    MOVLW   0x32		;move 50 into WREG
+    CPFSLT  refTempREG		;check if refTempREG is less than 50
+    SLEEP			;if not less than 50, sleep (error)
+    GOTO    _measuredcheck	;if between 10 and 50, check measured temp value
+    
+;Check if measuredTemp value is greater than -20 and less than 60
+_measuredcheck:   
+    ;MOVLW   -20		;move -20 into WREG
+    ;CPFSGT  measuredTempREG	;check if measuredTempREG is greater than -20
+    ;SLEEP			;if not greater than 10, sleep (error)
+    MOVLW   0x3C		;move 60 to WREG
+    CPFSLT  measuredTempREG	;check if measuredTempREG is less than 60
+    SLEEP			;if not less than 60, sleep (error)
+    GOTO    _equal		;if between -20 and 60, check if equal to ref temp value
+    
+;Convert HEX to DECIMAL: Code from the textbook
+_measuredDECIMAL:
+    NUMERATOR	EQU	0x30	;RAM location for NUMERATOR
+    QUOTIENT	EQU	0x40	;RAM location for QUOTIENT
+    RMND_L	EQU	0x70	;measuredTempDecimalLOW
+    RMND_M	EQU	0x71	;measuredTempDecimalMID
+    RMND_H	EQU	0x72	;measuredTempDecimalHIGH
+    ;MYNUM = measuredTempInput
+    DENOMINATOR	EQU	10	;measuredTempREG/10
+    ;ORG	    0x00		;start at 0x00
+    MOVLW   measuredTempInput	;this is the numerator (number we are converting)
+    MOVWF   NUMERATOR		;load value into NUMERATOR REG
+    MOVLW   DENOMINATOR		;move the denominator (10) into WREG
+    CLRF    QUOTIENT		;clear quotient
+_D_1:
+    INCF    QUOTIENT		;increment quotient for every sub
+    SUBWF   NUMERATOR		;sub WREG from NUMERATOR value
+    BC	    _D_1		;branch if carry --> if positive go back (C = 1 for positive)
+    ADDWF   NUMERATOR		;once too many, this is our first digit
+    DECF    QUOTIENT		;once too many for quotient
+    MOVFF   NUMERATOR,RMND_L	;save the first digit
+    MOVFF   QUOTIENT,NUMERATOR	;repeat the process one more time
+    CLRF    QUOTIENT		;clear QUOTIENT
+_D_2:
+    INCF    QUOTIENT
+    SUBWF   NUMERATOR		;subtract WREG from NUMERATOR value (numerator - WREG)
+    BC	    _D_2		;branch if carry --> C = 1 for positive
+    ADDWF   NUMERATOR		;once too many
+    DECF    QUOTIENT		
+    MOVFF   NUMERATOR,RMND_M	;2nd digit
+    MOVFF   QUOTIENT, RMND_H	;3rd digit
+_NEXT:
+    GOTO    _refDECIMAL
+    
+_refDECIMAL:
+    NUMERATOR2	EQU	0x31	;RAM location for NUMERATOR
+    QUOTIENT2	EQU	0x41	;RAM location for QUOTIENT
+    RMND_L2	EQU	0x60	;refTempDecimalLOW
+    RMND_M2	EQU	0x61	;refTempDecimalMID
+    RMND_H2	EQU	0x62	;refTempDecimalHIGH
+    ;MYNUM = refTempInput
+    DEN2	EQU	10	;refTempREG/10
+    ;ORG	    0x00	;start at 0x00
+    MOVLW   refTempInput	;this is the numerator (number we are converting)
+    MOVWF   NUMERATOR2		;load value into NUMERATOR2 REG
+    MOVLW   DEN2		;move the denominator (10) into WREG
+    CLRF    QUOTIENT2		;clear quotient
+_D_11:
+    INCF    QUOTIENT2		;increment quotient for every sub
+    SUBWF   NUMERATOR2		;sub WREG from NUMERATOR2 value
+    BC	    _D_11		;branch if carry --> if positive go back (C = 1 for positive)
+    ADDWF   NUMERATOR2		;once too many, this is our first digit
+    DECF    QUOTIENT2		;once too many for quotient
+    MOVFF   NUMERATOR2,RMND_L2	;save the first digit
+    MOVFF   QUOTIENT2,NUMERATOR2	;repeat the process one more time
+    CLRF    QUOTIENT2		;clear QUOTIENT2
+_D_22:
+    INCF    QUOTIENT2
+    SUBWF   NUMERATOR2		;subtract WREG from NUMERATOR2 value (numerator - WREG)
+    BC	    _D_22		;branch if carry --> C = 1 for positive
+    ADDWF   NUMERATOR2		;once too many
+    DECF    QUOTIENT2		
+    MOVFF   NUMERATOR2,RMND_M2	;2nd digit
+    MOVFF   QUOTIENT2, RMND_H2	;3rd digit
+_HERE:
+    GOTO    _END
+
+;Run comparisons to see if temperature values are equal, less than, greater than
+_equal:
+    MOVF    refTempREG, 0	;move refTempREG to WREG
+    CPFSEQ  measuredTempREG	;check if measuredTempREG = refTempREG
+    GOTO    _comparison		;if not equal then jump to comparison block
+    GOTO    _NOTHING		;if equal, then go to NOTHING
+    
+_comparison:  
+    CPFSGT  measuredTempREG	;check if measuredTempREG is greater than refTempREG
+    CPFSLT  measuredTempREG	;check if measuredTempREG is less than refTempREG
+    GOTO    _COOL		;go to COOL
+    GOTO    _HEAT		;go to HEAT
+    
+;Control temperature
+_COOL:
+    MOVLW   0x02		;move 0x02 into WREG
+    MOVWF   contREG		;move 0x02 into contREG
+    MOVLW   0b00000010
+    MOVWF   PORTD, A		;move 0x02 to PORTD
+    GOTO    _measuredDECIMAL
+
+_HEAT:
+    MOVLW   0x01		;move 0x01 into WREG
+    MOVWF   contREG		;move 0x01 into contREG
+    MOVLW   0b00000001
+    MOVWF   PORTD, A		;move 0x01 to PORTD
+    GOTO    _measuredDECIMAL
+    
+_NOTHING:
+    MOVLW   0x00		;move 0x00 into WREG
+    MOVWF   contREG		;move 0x00 into contREG
+    MOVLW   0b00000000
+    MOVWF   PORTD, A		;move 0x00 to PORTD
+    GOTO    _measuredDECIMAL
+
+_END:
+    END
