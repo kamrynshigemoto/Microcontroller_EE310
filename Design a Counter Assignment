@@ -1,0 +1,198 @@
+;----------------------------------
+; Title: DESIGN A COUNTER
+;----------------------------------
+; Purpose:
+; The purpose of this program is to create a counter using the microcontroller, 7-segment display, and two push buttons.
+; The two buttons can control the counter by making the numbers count up, down, and reset (display 0).
+;
+; Dependencies: myConfigFile.inc
+; Compiler: ASM v2.46
+; Author: Kamryn Shigemoto
+; Date: March 25, 2024
+; OUTPUTS: PORTD (seven segment display)
+; INPUTS: PORTB0 (switch A), PORTB1 (switch B)
+; Versions:
+;   v1.0:   March 25, 2024 - First version
+;----------------------------------
+
+;----------------------------------
+; Initialization
+;----------------------------------
+#include "C:\Users\kamsh\MPLABXProjects\DesignCounterAssignment310.X\myConfigFile.inc"
+#include <xc.inc>
+;----------------------------------
+
+;----------------------------------
+; PROGRAM CONSTANTS
+;----------------------------------
+#define	ZERO	0b00111111
+#define ONE	0b00000110
+#define TWO	0b01011011
+#define THREE	0b01001111
+#define FOUR	0b01100110
+#define FIVE	0b01101101
+#define SIX	0b01111101
+#define SEVEN	0b00000111
+#define EIGHT	0b01111111
+#define NINE	0b01101111
+#define A	0b00110111
+#define B	0b01111100
+#define C	0b00111001
+#define D	0b01011110
+#define	E	0b01111101
+#define F	0b01110001
+REG10	EQU	0x10
+REG11	EQU	0x11
+inner_loop  EQU	2;255
+outer_loop  EQU	2;255
+ZEROcheck   EQU	0x40
+Fcheck	    EQU	0x41
+;----------------------------------
+
+;----------------------------------
+; PROGRAM INPUTS
+;----------------------------------
+#define	SWITCH_A	PORTB, 0
+#define SWITCH_B	PORTB, 1
+;----------------------------------
+
+;----------------------------------
+; PROGRAM OUTPUTS
+;----------------------------------
+#define sevenSegment	PORTD
+;----------------------------------
+    
+;----------------------------------
+; MAIN PROGRAM
+;----------------------------------
+PSECT absdata,abs,ovrld
+
+ORG	0x20	    ;Begin assembly at 0x20
+_setupPortD:
+    BANKSEL	PORTD ;
+    CLRF	PORTD ;Initialize PORTD
+    BANKSEL	LATD ;Data Latch
+    CLRF	LATD ;
+    BANKSEL	ANSELD ;
+    CLRF	ANSELD ;digital I/O
+    ;BANKSEL	TRISD ;
+    MOVLW	0b00000000 ;Set RD[7:1] as outputs
+    MOVWF	TRISD ;and set RD0 as ouput
+
+_setupPortB:
+    BANKSEL	PORTB ;
+    CLRF	PORTB ;Initialize PORTB
+    BANKSEL	LATB ;Data Latch
+    CLRF	LATB ;
+    BANKSEL	ANSELB ;
+    CLRF	ANSELB ;digital I/O
+    ;BANKSEL	TRISB ;
+    MOVLW	0b00000011 ;
+    MOVWF	TRISB ;
+
+_loadValues:
+MOVLW	0x30
+MOVWF	ZEROcheck
+MOVLW	0x3F
+MOVWF	Fcheck
+MOVLW	ZERO	    ;move binary for zero into WREG
+MOVWF	0x30	    ;move binary for zero into REG0x30
+MOVLW	ONE	    ;move binary for one into WREG
+MOVWF	0x31	    ;move binary for one into REG0x31
+MOVLW	TWO	    ;move binary for two into WREG
+MOVWF	0x32	    ;move binary for two into REG0x32
+MOVLW	THREE	    ;move binary for three into WREG
+MOVWF	0x33	    ;move binary for three into REG0x33
+MOVLW	FOUR	    ;move binary for four into WREG
+MOVWF	0x34	    ;move binary for four into REG0x34
+MOVLW	FIVE	    ;move binary for five into WREG
+MOVWF	0x35	    ;move binary for five into REG0x35
+MOVLW	SIX	    ;move binary for six into WREG
+MOVWF	0x36	    ;move binary for six into REG0x36
+MOVLW	SEVEN	    ;move binary for seven into WREG
+MOVWF	0x37	    ;move binary for seven into REG0x37
+MOVLW	EIGHT	    ;move binary for eight into WREG
+MOVWF	0x38	    ;move binary for eight into REG0x38
+MOVLW	NINE	    ;move binary for nine into WREG
+MOVWF	0x39	    ;move binary for nine into REG0x39
+MOVLW	A	    ;move binary for A into WREG
+MOVWF	0x3A	    ;move binary for A into REG0x3A
+MOVLW	B	    ;move binary for B into WREG
+MOVWF	0x3B	    ;move binary for B into REG0x3B
+MOVLW	C	    ;move binary for C into WREG
+MOVWF	0x3C	    ;move binary for C into REG0x3C
+MOVLW	D	    ;move binary for D into WREG
+MOVWF	0x3D	    ;move binary for D into REG0x3D
+MOVLW	E	    ;move binary for E into WREG
+MOVWF	0x3E	    ;move binary for E into REG0x3E
+MOVLW	F	    ;move binary for F into WREG
+MOVWF	0x3F	    ;move binary for F into REG0x3F
+LFSR	1, 0x30	    ;load FSR1 with ZERO
+    
+_checkSwitches:
+BTFSS	SWITCH_A	;check if switch A is pressed
+BRA	_switchAoff	;if switch A not on
+BTFSS	SWITCH_B	;if switch A is set --> check switch B
+BRA	_onlyswitchAON	;if switch B is not on
+BRA	_bothON		;if switch A and B are ON
+    
+_switchAoff:
+BTFSS	SWITCH_B    ;check if switch B is set
+GOTO	_bothOFF    ;if both A and B are off
+GOTO	_countDOWN  ;if A is off and B is on --> count down
+
+_onlyswitchAON:
+GOTO	_countUP    ;only A is ON
+
+_bothON:
+;clear counter --> display 0
+LFSR	1,0x30
+MOVFF	INDF1, PORTD
+GOTO	_checkSwitches
+    
+_bothOFF:
+;display last number
+MOVFF	INDF1, PORTD
+GOTO	_checkSwitches
+    
+_countUP:
+CLRF	WREG		;clear WREG
+MOVFF	FSR1, WREG
+CPFSEQ	0x41		;check if FSR1 equals F (Fcheck REG)
+GOTO	_increment
+LFSR	1, 0x30		;load 0 back into FSR1
+_increment:
+MOVFF	INDF1, PORTD	;move value to PORTD
+MOVFF	POSTINC1, PORTD	;move to next value counting up
+CALL	_delayLoop
+GOTO	_countUP	;loop again
+GOTO	_checkSwitches
+    
+_countDOWN:
+CLRF	WREG		;clear WREG
+MOVFF	FSR1, WREG
+CPFSEQ	0x40		;check if FSR1 equals ZERO (ZEROcheck REG)
+GOTO	_decrement	
+LFSR	1, 0x3F		;load F back into FSR1
+_decrement:
+MOVFF	INDF1, PORTD	;move value to PORTD
+MOVFF	POSTDEC1, PORTD	;move to next value counting down
+CALL	_delayLoop
+GOTO    _countDOWN
+GOTO	_checkSwitches
+    
+_delayLoop: 
+    MOVLW       inner_loop
+    MOVWF       REG10
+    MOVLW       outer_loop
+    MOVWF       REG11
+_loop1:
+    DECF        REG10,1
+    BNZ         _loop1
+    MOVLW	inner_loop
+    MOVWF	REG10
+    DECF        REG11,1 // outer loop
+    BNZ        _loop1
+    RETURN
+    
+END
